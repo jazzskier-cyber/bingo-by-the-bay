@@ -1,5 +1,10 @@
 import { dayKey, dailyCard, dailyOffers, readRecords, saveWin } from './challenge.js';
-const isDaily=new URLSearchParams(location.search).get('daily')==='1';
+import { BingoLeaderboard, insidePlayer, leaderboardConfig, leaderboardUrl } from './leaderboard.js';
+const params=new URLSearchParams(location.search);
+const isRanked=params.get('ranked')==='1';
+const isDaily=isRanked || params.get('daily')==='1';
+const leaderboard=isRanked && insidePlayer()?new BingoLeaderboard():null;
+let rankedRun;
 let challengeDay;
 import './style.css';
 import { createMusic } from './music.js';
@@ -21,13 +26,13 @@ let card, calls, marked, won, muted = true, audio, offers=[], charge=0, wilds=0,
 let round=0, mode='classic', deck=[], autoTimer;
 const stopAuto=()=>{ clearInterval(autoTimer); autoTimer=undefined; if(document.getElementById('auto')) { document.getElementById('auto').textContent='Auto-call · off'; document.getElementById('auto').setAttribute('aria-pressed','false'); } };
 const app = document.querySelector('#app');
-app.innerHTML = `<main class="phone"><header><div class="brand">bingo <em>by the</em> bay<span>GOOD TIDES · GOOD TIMES</span></div><div class="wallet">${shell}<span id="shells">${shells}</span></div><button id="trophy" class="icon-button trophy" aria-label="Daily challenge and personal records" title="Daily challenge and records"><svg viewBox="0 0 24 24" width="23" height="23" fill="none" aria-hidden="true"><path d="M7 3h10v6a5 5 0 0 1-10 0V3Z" fill="currentColor"/><path d="M7 5H3v3a4 4 0 0 0 5 4m9-7h4v3a4 4 0 0 1-5 4m-4 2v6m-4 1h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button><button id="sound" class="icon-button" aria-label="Turn music and sound on" title="Turn music and sound on">♪<span class="sound-off">/</span></button></header><section class="scene">${scene}<div class="scene-caption"><span class="location-dot"></span> THE SEASIDE COTTAGE <span class="chapter">01</span></div><button class="garden-button" id="garden" aria-label="Decorate your cottage">✿</button></section><section class="play"><div class="round-heading"><div><span class="eyebrow" id="round-label"></span><h1>Catch a lucky tide.</h1></div><span class="round-tag" id="mode-label"></span></div><div class="caller"><div class="current-ball" id="ball"><span>READY</span><strong>☀</strong></div><div class="call-info"><span class="eyebrow" id="call-label">YOUR NEXT LITTLE MOMENT</span><p id="call-title">Let’s begin, shall we?</p><div class="history" id="history"><span>Call a number to start your card.</span></div></div><button id="history-button" class="icon-button history-button" aria-label="See all called numbers">≡</button></div><section class="bingo-card" aria-label="Your bingo card"><div class="letters" aria-hidden="true"><span>B</span><span>I</span><span>N</span><span>G</span><span>O</span></div><div id="grid" class="grid"></div><div class="card-footer"><span>✦</span> FIVE IN A ROW MAKES A LITTLE MAGIC <span>✦</span></div></section><p class="hint" id="hint" role="status">A row, a column, a diagonal. All lovely ways to win.</p><button class="primary" id="next"><span>Call the first number</span><span>→</span></button><button id="auto" class="auto-call" aria-pressed="false">Auto-call · off</button><div class="choices" id="choices" aria-label="Choose your next number"></div><button id="wild" class="wild-button" disabled>✦ Wild stamp <span>0 / 3 matches</span></button><footer><span>≈</span> Your tide. Your choice. Your bingo.</footer></section><dialog id="modal"><button id="close" class="close" aria-label="Close dialog">×</button><div id="modal-content"></div></dialog></main>`;
+app.innerHTML = `<main class="phone"><header><div class="brand">bingo <em>by the</em> bay<span>GOOD TIDES · GOOD TIMES</span></div><div class="wallet">${shell}<span id="shells">${shells}</span></div><button id="trophy" class="icon-button trophy" aria-label="Challenges, leaderboard and personal records" title="Challenges and leaderboard"><svg viewBox="0 0 24 24" width="23" height="23" fill="none" aria-hidden="true"><path d="M7 3h10v6a5 5 0 0 1-10 0V3Z" fill="currentColor"/><path d="M7 5H3v3a4 4 0 0 0 5 4m9-7h4v3a4 4 0 0 1-5 4m-4 2v6m-4 1h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button><button id="sound" class="icon-button" aria-label="Turn music and sound on" title="Turn music and sound on">♪<span class="sound-off">/</span></button></header><section class="scene">${scene}<div class="scene-caption"><span class="location-dot"></span> THE SEASIDE COTTAGE <span class="chapter">01</span></div><button class="garden-button" id="garden" aria-label="Decorate your cottage">✿</button></section><section class="play"><div class="round-heading"><div><span class="eyebrow" id="round-label"></span><h1>Catch a lucky tide.</h1></div><span class="round-tag" id="mode-label"></span></div><div class="caller"><div class="current-ball" id="ball"><span>READY</span><strong>☀</strong></div><div class="call-info"><span class="eyebrow" id="call-label">YOUR NEXT LITTLE MOMENT</span><p id="call-title">Let’s begin, shall we?</p><div class="history" id="history"><span>Call a number to start your card.</span></div></div><button id="history-button" class="icon-button history-button" aria-label="See all called numbers">≡</button></div><section class="bingo-card" aria-label="Your bingo card"><div class="letters" aria-hidden="true"><span>B</span><span>I</span><span>N</span><span>G</span><span>O</span></div><div id="grid" class="grid"></div><div class="card-footer"><span>✦</span> FIVE IN A ROW MAKES A LITTLE MAGIC <span>✦</span></div></section><p class="hint" id="hint" role="status">A row, a column, a diagonal. All lovely ways to win.</p><button class="primary" id="next"><span>Call the first number</span><span>→</span></button><button id="auto" class="auto-call" aria-pressed="false">Auto-call · off</button><div class="choices" id="choices" aria-label="Choose your next number"></div><button id="wild" class="wild-button" disabled>✦ Wild stamp <span>0 / 3 matches</span></button><footer><span>≈</span> Your tide. Your choice. Your bingo.</footer></section><dialog id="modal"><button id="close" class="close" aria-label="Close dialog">×</button><div id="modal-content"></div></dialog></main>`;
 const $ = id => document.getElementById(id);
 function persist() { try { localStorage.setItem('bingo-bay', JSON.stringify({shells, planted})); } catch {} $('shells').textContent = shells; }
 function chime() { if (muted) return; try { audio ??= new (window.AudioContext || window.webkitAudioContext)(); audio.resume(); [523.25,659.25,783.99].forEach((frequency,i) => { const osc = audio.createOscillator(), gain = audio.createGain(), start = audio.currentTime + i * .08; osc.type = 'sine'; osc.frequency.value = frequency; gain.gain.setValueAtTime(0,start); gain.gain.linearRampToValueAtTime(.055,start+.015); gain.gain.exponentialRampToValueAtTime(.001,start+.7); osc.connect(gain); gain.connect(audio.destination); osc.start(start); osc.stop(start+.72); }); } catch {} }
 function drawCard() { $('grid').innerHTML = card.map((n,i) => `<button class="cell ${marked.has(i)?'marked':''} ${i===12?'free':''}" data-index="${i}" aria-label="${n ? `${letter(n)} ${n}` : 'Free space'}" aria-pressed="${marked.has(i)}">${n || '<span>✿</span><small>FREE</small>'}</button>`).join(''); }
 function updatePower() {
- $('wild').disabled=!wilds || won;
+ $('wild').disabled=isRanked || !wilds || won;
  $('wild').classList.toggle('armed',wildMode);
  $('wild').innerHTML=`✦ ${wildMode?'Choose any square':'Wild stamp'} <span>${wilds ? `${wilds} ready` : `${charge} / 3 matches`}</span>`;
  $('grid').classList.toggle('wild-ready',wildMode && !isDaily && round<=2);
@@ -40,12 +45,14 @@ function showOffers() {
  [...$('grid').children].forEach((cell,i)=>cell.classList.toggle('offered',showNumberHint(isDaily?3:round,card[i],offers,marked.has(i))));
 }
 function newRound() {
- stopAuto(); round++; challengeDay=isDaily?dayKey():undefined; mode=isDaily?'choice':modeForRound(round); deck=createCallDeck(); offers=[];
+ stopAuto(); round++; challengeDay=isRanked?leaderboardConfig.challenge:isDaily?dayKey():undefined; mode=isDaily?'choice':modeForRound(round); deck=createCallDeck(); offers=[];
+ rankedRun=leaderboard?.beginRun();
  $('next').disabled=false;
  $('round-label').textContent=`ROUND ${round} · ${mode==='classic'?'LISTEN, SPOT, STAMP':'PICK YOUR NUMBER. MAKE YOUR MOVE.'}`;
- $('mode-label').textContent=isDaily?'DAILY':mode==='classic'?'CLASSIC':'LUCKY CHOICE';
- if(isDaily) $('round-label').textContent=`DAILY CHALLENGE · ${challengeDay} UTC`;
- $('wild').hidden=mode==='classic'; $('auto').hidden=mode!=='classic';
+ $('mode-label').textContent=isRanked?'RANKED':isDaily?'DAILY':mode==='classic'?'CLASSIC':'LUCKY CHOICE';
+ if(isRanked) $('round-label').textContent='TIDE TRIAL · SAME PUZZLE FOR EVERYONE';
+ else if(isDaily) $('round-label').textContent=`DAILY CHALLENGE · ${challengeDay} UTC`;
+ $('wild').hidden=mode==='classic' || isRanked; $('auto').hidden=mode!=='classic';
  card=isDaily?dailyCard(challengeDay):createCard(); calls=[]; marked=new Set([12]); won=false; charge=0; wilds=0; wildMode=false; turns=0;
  drawCard(); updatePower();
  if(mode==='classic') {
@@ -63,7 +70,7 @@ function newRound() {
  $('call-title').textContent='Two numbers. Your choice.';
  $('history').innerHTML='<span>Pick below → stamp its matching square.</span>';
  $('call-label').textContent='BUILD A LINE IN FEWER MOVES';
- $('hint').textContent=isDaily?'Same daily puzzle. No hints. Fewer moves is better.':'Every 3 matches earns a wild. Use it on any square.';
+ $('hint').textContent=isRanked?'Same ranked puzzle for everyone. No hints. Fewer moves wins.':isDaily?'Same daily puzzle. No hints. Fewer moves is better.':'Every 3 matches earns a wild. Use it on any square.';
 }
 function showModal(html) { stopAuto(); $('modal-content').innerHTML=html; if (!$('modal').open) $('modal').showModal(); }
 $('choices').onclick=e=>{
@@ -79,27 +86,43 @@ $('choices').onclick=e=>{
  [...$('grid').children].forEach((cell,i)=>cell.classList.toggle('offered',showNumberHint(isDaily?3:round,card[i],[n],marked.has(i))));
  $('hint').textContent=!isDaily && round<=2?'Stamp the glowing square to reveal your next choice.':'Find and stamp your chosen number to reveal the next choice.';
 };
-$('wild').onclick=()=>{ if(!wilds || won || mode!=='choice') return; wildMode=!wildMode; updatePower(); $('hint').textContent=wildMode?'Pick any unmarked square. Where will it help most?':'Wild saved. Choose your next number.'; };
+$('wild').onclick=()=>{ if(isRanked || !wilds || won || mode!=='choice') return; wildMode=!wildMode; updatePower(); $('hint').textContent=wildMode?'Pick any unmarked square. Where will it help most?':'Wild saved. Choose your next number.'; };
 $('grid').addEventListener('click', e => {
  const cell=e.target.closest('[data-index]'); if(!cell || won) return;
  const i=Number(cell.dataset.index); if(marked.has(i)) return;
- const useWild=wildMode;
+ const useWild=wildMode && !isRanked;
  if(!useWild && !calls.includes(card[i])) { $('hint').textContent=mode==='classic'?'Wait until this number is called. Earlier calls still count.':'Choose this number when it appears, or use a wild stamp.'; return; }
  if(useWild) { wilds--; wildMode=false; }
- const result=mode==='choice'?stampCharge(charge,useWild):{charge:0,earned:0}; charge=result.charge; wilds+=result.earned;
+ const result=mode==='choice' && !isRanked?stampCharge(charge,useWild):{charge:0,earned:0}; charge=result.charge; wilds+=result.earned;
  marked.add(i); cell.classList.add('marked'); cell.classList.remove('offered'); cell.setAttribute('aria-pressed','true');
  shells++; persist(); chime(); updatePower();
- $('hint').textContent=mode==='classic'?'+1 shell. Keep an eye on your next line.':result.earned?'WILD READY! Use it to fill a gap in your best line.':useWild?'Nice move. That square is yours.':`${3-charge} more matches to your next wild stamp.`;
+ $('hint').textContent=isRanked?'Nice move. Build a winning line with as few choices as you can.':mode==='classic'?'+1 shell. Keep an eye on your next line.':result.earned?'WILD READY! Use it to fill a gap in your best line.':useWild?'Nice move. That square is yours.':`${3-charge} more matches to your next wild stamp.`;
  const line=winningLine(marked);
  if(line) {
    won=true; wildMode=false; stopAuto(); updatePower();
-   const reward=roundReward(mode,turns); const nextMode=isDaily?'Daily again':mode==='classic'?'Lucky Choice':'Classic';
+   const reward=roundReward(mode,turns); const nextMode=isRanked?'Tide Trial':isDaily?'Daily again':mode==='classic'?'Lucky Choice':'Classic';
    const recordSaved=saveWin(mode,turns,challengeDay);
    shells+=reward.bonus; persist(); line.forEach(j=>$('grid').children[j].classList.add('winner'));
    $('choices').hidden=true; $('next').hidden=false; $('next').disabled=false; $('auto').hidden=true;
    $('hint').textContent=`${reward.label}! +${reward.bonus} shells. Next: ${nextMode}.`;
    $('next').innerHTML=`<span>Play ${nextMode}</span><span>→</span>`;
-   showModal(`<div class="modal-symbol">✦</div><span class="eyebrow">${reward.label.toUpperCase()} · ${turns} ${mode==='classic'?'CALLS':'MOVES'}</span><h2>That’s your bingo!</h2><p>+${reward.bonus} bonus shells.<br>${isDaily?(recordSaved?'Daily result recorded on this device. Try again to improve your move count.':'Your result could not be saved on this device.'):mode==='classic'?'Next: choose between two numbers and earn wild stamps.':'Next: classic number calls. Spot your matches and make a line.'}</p><button class="primary" id="celebrate">Play ${nextMode} <span>→</span></button><button id="result-records" class="records-link">${recordSaved?'View personal records':'Record could not be saved · view records'}</button>`);
+   showModal(`<div class="modal-symbol">✦</div><span class="eyebrow">${reward.label.toUpperCase()} · ${turns} ${mode==='classic'?'CALLS':'MOVES'}</span><h2>That’s your bingo!</h2><p>+${reward.bonus} bonus shells.<br>${isRanked?'Tide Trial complete. Your fewest moves count toward your personal best.':isDaily?(recordSaved?'Daily result recorded on this device. Try again to improve your move count.':'Your result could not be saved on this device.'):mode==='classic'?'Next: choose between two numbers and earn wild stamps.':'Next: classic number calls. Spot your matches and make a line.'}</p>${isRanked?`<p id="online-status" class="record-note" role="status">${leaderboard?'Saving your result to the leaderboard…':'Play from AIWANNA to submit a score.'}</p><button id="retry-score" class="records-link" hidden>Retry saving score</button><a class="records-link" href="${leaderboardUrl}" target="_blank" rel="noopener">See the leaderboard ↗</a>`:''}<button class="primary" id="celebrate">Play ${nextMode} <span>→</span></button><button id="result-records" class="records-link">${recordSaved?'View personal records':'Record could not be saved · view records'}</button>`);
+   if(isRanked && rankedRun) {
+     const completedRun=rankedRun;
+     const submit=async()=>{
+       const status=$('online-status'), retry=$('retry-score');
+       if(status) status.textContent='Saving your result to the leaderboard…';
+       if(retry) retry.hidden=true;
+       try {
+         const receipt=await leaderboard.submit(completedRun,turns);
+         if(status && $('online-status')===status) status.textContent=receipt.rank?`Saved! Rank #${receipt.rank} · ${turns} moves.`:`${turns} moves saved to the leaderboard.`;
+       } catch(error) {
+         if(status && $('online-status')===status) { status.textContent=`Could not save: ${error.message}`; if(retry) retry.hidden=false; }
+       }
+     };
+     $('retry-score').onclick=submit;
+     void submit();
+   }
    $('result-records').onclick=showRecords;
    $('celebrate').onclick=()=>{ $('modal').close(); newRound(); };
  } else if(mode==='choice') { showOffers(); }
@@ -132,8 +155,8 @@ document.addEventListener('visibilitychange',()=>{ if(document.hidden) { music.s
 function showRecords() {
  const records=readRecords(), today=dayKey();
  const safeEntry=key=>{ const v=records[key]; return v && Number.isSafeInteger(v.best) && v.best>0 && Number.isSafeInteger(v.wins) && v.wins>0?v:null; };
- const classic=safeEntry('classic'), choice=safeEntry('choice'), daily=safeEntry(`daily:${today}`);
- showModal(`<div class="modal-symbol">✦</div><span class="eyebrow">YOUR LITTLE HALL OF FAME</span><h2>A new tide, every day.</h2><p>Daily Lucky Choice · ${today} UTC<br>Same card and number priorities for everyone.<br>Fewest moves wins. No speed bonus. No hints.</p><div class="record-list"><div><span>Today's daily best</span><strong>${daily?`${daily.best} moves`:'Not played yet'}</strong></div><div><span>Lucky Choice best</span><strong>${choice?`${choice.best} moves`:'—'}</strong></div><div><span>Classic bingos</span><strong>${classic?classic.wins:0}</strong></div></div><a class="primary daily-link" href="?daily=1" ${isDaily?'':'target="_blank" rel="noopener"'}>${isDaily?'Restart daily challenge':'Play daily challenge'} <span>→</span></a><p class="record-note">Personal records are saved on this device.<br>Online rankings are not connected yet.</p>${isDaily?'<a class="records-link" href="./">Back to alternating rounds</a>':'<p class="small">Opens separately so your current round stays here.</p>'}`);
+ const classic=safeEntry('classic'), choice=safeEntry('choice'), daily=safeEntry(`daily:${today}`), ranked=safeEntry(`daily:${leaderboardConfig.challenge}`);
+ showModal(`<div class="modal-symbol">✦</div><span class="eyebrow">YOUR LITTLE HALL OF FAME</span><h2>Catch a winning tide.</h2><p>Tide Trial uses the same card and number offers for everyone. Fewest moves wins; ties share a rank. No speed bonus, wilds or number hints.</p><div class="record-list"><div><span>Ranked Tide Trial best</span><strong>${ranked?`${ranked.best} moves`:'Not played yet'}</strong></div><div><span>Today's daily best</span><strong>${daily?`${daily.best} moves`:'Not played yet'}</strong></div><div><span>Lucky Choice best</span><strong>${choice?`${choice.best} moves`:'—'}</strong></div><div><span>Classic bingos</span><strong>${classic?classic.wins:0}</strong></div></div><a class="primary daily-link" href="?ranked=1">${isRanked?'Restart Tide Trial':'Play ranked Tide Trial'} <span>→</span></a><a class="records-link" href="${leaderboardUrl}" target="_blank" rel="noopener">See the leaderboard ↗</a><a class="records-link" href="?daily=1" ${isDaily&&!isRanked?'':'target="_blank" rel="noopener"'}>${isDaily&&!isRanked?'Restart daily challenge':'Play daily challenge'}</a><p class="record-note">Personal records stay on this device. Online scores submit only when you play from AIWANNA. The leaderboard accepts client-reported results for casual play.</p>${isDaily?'<a class="records-link" href="./">Back to alternating rounds</a>':'<p class="small">Tide Trial replaces this round; the daily challenge opens separately.</p>'}`);
 }
 $('trophy').onclick=showRecords;
 
