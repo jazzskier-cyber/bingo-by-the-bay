@@ -46,7 +46,7 @@ export function requestPlayerSession(win = window) {
 }
 
 export class BingoLeaderboard {
-  constructor({ fetcher = fetch, sessionProvider = requestPlayerSession } = {}) {
+  constructor({ fetcher = globalThis.fetch.bind(globalThis), sessionProvider = requestPlayerSession } = {}) {
     this.fetcher = fetcher;
     this.sessionProvider = sessionProvider;
     this.session = null;
